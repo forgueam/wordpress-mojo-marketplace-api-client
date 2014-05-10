@@ -44,25 +44,9 @@ class Mojo_Marketplace_Api_Client
 	}
 
 	/**
-	 * Handle a Mojo Marketplace Purchase Notification
-	 * Creates a WP user and associates appropriate products
-	 *
-	 */
-	public function purchase_notification( $purchase_data ) {
-
-		// Generate a random password for the user
-		$password = wp_generate_password();
-
-		echo $this->create_user( 
-			$purchase_data['buyer_data']['email'],
-			$password
-		);
-	}
-
-	/**
 	 * Create a WordPress user account
 	 */
-	public function create_user( $email_address, $password, $user_data = array() ) {
+	public function create_user( $email_address, $user_data = array() ) {
 
 		// Check for duplicate email addresses
 		$existing_user = get_user_by( 'email', $email_address );
@@ -83,6 +67,13 @@ class Mojo_Marketplace_Api_Client
 			'nickname' => $email_address,
 			'user_login' => $email_address
 		);
+
+		// Set password
+		if ( !empty( $user_data['password'] ) ) {
+			$password = $user_data['password'];
+		} else {
+			$password = wp_generate_password();
+		}
 		
 		// Create the WP user
 		$new_wp_user_id = wp_create_user( $new_wp_user['user_login'], $password, $new_wp_user['user_email'] );
@@ -95,7 +86,7 @@ class Mojo_Marketplace_Api_Client
 		$new_wp_user['ID'] = $new_wp_user_id;
 		$new_wp_user['first_name'] = !empty( $user_data['first_name'] ) ? $user_data['first_name'] : null;
 		$new_wp_user['last_name'] = !empty( $user_data['last_name'] ) ? $user_data['last_name'] : null;
-		$new_wp_user['display_name'] = ( empty( $user_data['first_name'] ) && empty( $user_data['last_name'] ) ) ? $user_data['user_email'] : $user_data['first_name'] . ' ' . $user_data['last_name'];
+		$new_wp_user['display_name'] = ( empty( $user_data['first_name'] ) && empty( $user_data['last_name'] ) ) ? $email_address : $user_data['first_name'] . ' ' . $user_data['last_name'];
 
 		wp_update_user( $new_wp_user );
 
