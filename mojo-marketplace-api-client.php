@@ -44,9 +44,9 @@ class Mojo_Marketplace_Api_Client
 	}
 
 	/**
-	 * Create a WordPress user account
+	 * Search for an existing user using email address
 	 */
-	public function create_user( $email_address, $user_data = array() ) {
+	public function find_user( $email_address ) {
 
 		// Check for duplicate email addresses
 		$existing_user = get_user_by( 'email', $email_address );
@@ -58,6 +58,20 @@ class Mojo_Marketplace_Api_Client
 		$existing_user = get_user_by( 'login', $email_address );
 		if ( !empty( $existing_user->ID ) ) {
 			return $existing_user->ID;
+		}
+
+		// None found
+		return false;
+	}
+
+	/**
+	 * Create a WordPress user account
+	 */
+	public function create_user( $email_address, $user_data = array() ) {
+
+		$existing_user_id = $this->find_user( $email_address );
+		if ( $existing_user_id ) {
+			return $existing_user_id;
 		}
 
 		// No existing users. Initialize base details for a new user account

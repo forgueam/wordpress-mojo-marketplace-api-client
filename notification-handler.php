@@ -30,32 +30,55 @@
 		exit;
 	}
 
-	// Start up the Client and pass in the Purchase Notification data for processing
+	// Start up the Client and pass in the Purchase Notification
+	// data for processing
 	$mmac = mojo_marketplace_api_client_instance();
 	$mmac->init( MOJO_MARKETPLACE_API_USERNAME, MOJO_MARKETPLACE_API_KEY );
 
-	// Verify purchase notification data
+	// TODO: Verify purchase notification data
 	//$mmac->verify_notification_data( $purchase_data );
 
-	// Create user account for order
-	$password = wp_generate_password();
-	$wp_user_id = $mmac->create_user( 
-		$purchase_data['buyer_data']['email'],
-		array(
-			'password' => $password,
-			'first_name' => $purchase_data['buyer_data']['first_name'],
-			'last_name' => $purchase_data['buyer_data']['last_name']
-		)
-	);
+	// Lookup/Create user account for order
+	$wp_user_id = $mmac->find_user( $purchase_data['buyer_data']['email'] );
 
-	// TODO: Email user their account information
-	// wp_mail( $purchase_data['buyer_data']['email'], MMAC_EMAIL_NOTIFICATION_SUBJECT, 'Your temporary password: ' . $password );
+	if ( empty( $wp_user_id ) ) {
+
+		$password = wp_generate_password();
+		$wp_user_id = $mmac->create_user( 
+			$purchase_data['buyer_data']['email'],
+			array(
+				'password' => $password,
+				'first_name' => $purchase_data['buyer_data']['first_name'],
+				'last_name' => $purchase_data['buyer_data']['last_name']
+			)
+		);
+
+		$send_password = true;
+	}
 
 
 /***** Everything below this line is related to Easy Digital Downloads ******/
 
+	// Check to make sure this order hasn't already been created
+	$existing_orders = $wpdb->get_var( $wpdb->prepare( 
+		"
+			SELECT count(1)
+			FROM $wpdb->postmeta
+			WHERE meta_value = %s
+		", 
+		$purchase_data['buyer_data']['order_id']
+	) );
+
+	if ( !empty( $existing_orders ) ) {
+		echo 'Purchase order has already been created.';
+		exit;
+	}
+
 	// Create Easy Digital Downloads Purchase
-	require_once( MMAC_EDD_PATH . 'easy-digital-downloads/includes/payments/functions.php' );
+	require_once(
+		MMAC_EDD_PATH .
+		'easy-digital-downloads/includes/payments/functions.php'
+	);
 
 	if ( empty( $purchase_data['buyer_data']['products'] ) ) {
 		echo 'Purchase notification contains no prodcuts.';
@@ -129,4 +152,44 @@
 		)
 	);
 	
-	edd_insert_payment($payment_data);
+	edd_insert_payment( $payment_data );
+
+	if (
+		defined( 'MMAC_EMAIL_NOTIFICATION_SUBJECT_NEW_USER' ) &&
+		defined( 'MMAC_EMAIL_NOTIFICATION_CONTENT_NEW_USER' ) &&
+		defined( 'MMAC_EMAIL_NOTIFICATION_SUBJECT_EXISTING_USER' ) &&
+		defined( 'MMAC_EMAIL_NOTIFICATION_CONTENT_EXISTING_USER' )
+	) {
+
+		// Email user their account and order information
+		if ( !empty( $send_password ) ) {
+			$subject = MMAC_EMAIL_NOTIFICATION_SUBJECT_NEW_USER;
+			$body = MMAC_EMAIL_NOTIFICATION_CONTENT_NEW_USER;
+		} else {
+			$subject = MMAC_EMAIL_NOTIFICATION_SUBJECT_EXISTING_USER;
+			$body = MMAC_EMAIL_NOTIFICATION_CONTENT_EXISTING_USER;
+		}
+
+		$body = str_replace(
+			'{EMAIL}',
+			$purchase_data['buyer_data']['email'],
+			$body
+		);
+		
+		if ( !empty( $password ) ) {
+			$body = str_replace( '{PASSWORD}', $password, $body );
+		}
+
+		if ( defined( 'MMAC_EMAIL_NOTIFICATION_TEST_EMAIL' ) ) {
+			$email = MMAC_EMAIL_NOTIFICATION_TEST_EMAIL;
+		} else {
+			$email = $purchase_data['buyer_data']['email'];
+		}
+
+		wp_mail(
+			$email,
+			$subject,
+			$body
+		);
+
+	}
